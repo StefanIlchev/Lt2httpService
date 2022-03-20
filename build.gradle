@@ -1,0 +1,303 @@
+buildscript {
+
+	repositories {
+		google()
+		mavenCentral()
+		mavenLocal()
+		maven { url 'https://jitpack.io' }
+	}
+
+	dependencies {
+		classpath 'com.android.tools.build:gradle:7.1.2'
+	}
+}
+
+apply {
+	plugin 'com.android.application'
+}
+
+allprojects {
+
+	repositories {
+		google()
+		mavenCentral()
+		mavenLocal()
+		maven { url 'https://jitpack.io' }
+	}
+}
+
+def localProperties = new Properties()
+try {
+	localProperties.load(file('local.properties').newInputStream())
+} catch (Throwable t) {
+	t.printStackTrace()
+}
+
+def addonId = 'service.lt2http'
+
+def srcGen = "$buildDir.path/src"
+def srcMainGen = "$srcGen/main"
+def srcMainAssetsGen = "$srcMainGen/assets"
+def srcMainJniLibsGen = "$srcMainGen/jniLibs"
+
+android {
+	compileSdk 31
+
+	compileOptions {
+		sourceCompatibility JavaVersion.VERSION_11
+		targetCompatibility JavaVersion.VERSION_11
+	}
+
+	defaultConfig {
+		minSdk 26
+		targetSdk compileSdk
+		versionCode localProperties.getProperty('versionCode') as Integer ?: 1
+		versionName localProperties.getProperty('versionName') ?: "$versionCode"
+		applicationId 'service.lt2http.android'
+		manifestPlaceholders = [
+				'mainIntentAction': 'android.intent.action.MAIN'
+		]
+		buildConfigField 'String', 'ADDON_ID', "\"$addonId\""
+	}
+
+	applicationVariants.all { variant ->
+		variant.outputs.each {
+			def fileName = it.outputFileName
+			def name = fileName - ~/\.[^.]+$/
+			it.outputFileName = "$name-$variant.versionName${fileName.substring(name.length())}"
+		}
+	}
+
+	signingConfigs {
+
+		debug {
+			storeFile file('debug.keystore')
+			storePassword 'android'
+			keyAlias 'androiddebugkey'
+			keyPassword 'android'
+		}
+	}
+
+	buildTypes {
+
+		debug {
+			manifestPlaceholders = [
+					'mainIntentCategory': 'android.intent.category.LAUNCHER'
+			]
+		}
+
+		release {
+			minifyEnabled true
+			shrinkResources true
+			proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+			signingConfig signingConfigs.debug
+			manifestPlaceholders = [
+					'mainIntentCategory': 'android.intent.category.DEFAULT'
+			]
+		}
+	}
+
+	sourceSets {
+
+		main {
+
+			assets {
+				srcDir srcMainAssetsGen
+			}
+
+			jniLibs {
+				srcDir srcMainJniLibsGen
+			}
+		}
+	}
+
+	splits {
+
+		abi {
+			enable true
+			universalApk true
+		}
+	}
+
+	packagingOptions {
+
+		jniLibs {
+			useLegacyPackaging true
+		}
+	}
+}
+
+dependencies {
+	implementation localProperties.getProperty('binaryWrapper') ?: 'com.github.StefanIlchev:binaryWrapper:1.0.1'
+}
+
+def addonZip = System.getProperty('addonZip') ?: localProperties.getProperty('addonZip')
+def binariesZip = System.getProperty('binariesZip') ?: localProperties.getProperty('binariesZip')
+if (addonZip != null && binariesZip != null) {
+	def addonDir = "$buildDir.path/${file(addonZip).name - ~/\.[^.]+$/}"
+	def addonIdDir = "$addonDir/$addonId"
+	def addonVersion = android.defaultConfig.versionName
+	def binariesDir = "$buildDir.path/${file(binariesZip).name - ~/\.[^.]+$/}"
+	def binariesIdDir = "$binariesDir/${file(binariesDir).name}"
+
+	task patchAddon() {
+
+		doFirst {
+			delete addonDir
+			delete binariesDir
+		}
+
+		doLast {
+			copy {
+				from zipTree(addonZip)
+				into addonDir
+			}
+			copy {
+				from zipTree(binariesZip)
+				into binariesDir
+			}
+			def addonFile = file("$addonIdDir/addon.xml")
+			def addonInfo = new groovy.xml.XmlSlurper().parse(addonFile)
+			addonInfo.@'version' = addonVersion
+			addonFile.withWriter {
+				groovy.xml.XmlUtil.serialize(new groovy.xml.StreamingMarkupBuilder().bind {
+					mkp.yield addonInfo
+				}, it)
+			}
+			def applicationId = android.defaultConfig.applicationId
+			def startArgs = [
+					applicationId,
+					android.defaultConfig.manifestPlaceholders['mainIntentAction'],
+					'',
+					"version:$addonVersion%s"
+			].join(', ')
+			def pathPattern = '/org\\.xbmc\\.kodi/'
+			def pathReplace = "/$applicationId/"
+			def configLine = 'config_path = os.path.join(translatePath("special://temp/"), "lt2http-config.json")'
+			def configLinePatched = "config_path = os.path.join(translatePath(ADDON_PATH), '..', '..', '..', '..', '..', '..', '..', 'lt2http-config.json')"
+			def versionLine = '    installed_version = read_current_version(binary_dir)'
+			def versionLinePatched = """
+					|    installed_version = ADDON_VERSION
+					|    binary_dir = ADDON_PATH
+					|    dest_binary_dir = binary_dir
+					|    binary_path = os.path.join(ADDON_PATH, 'fanart.png')
+					|    dest_binary_path = binary_path""".stripMargin()
+			def binaryLine = '    return dest_binary_dir, ensure_exec_perms(dest_binary_path)'
+			def binaryLinePatched = "    return 'N/A', 'N/A'"
+			def startLine = '        return subprocess.Popen(args, **kwargs)'
+			def startLinePatched = """
+					|        encode = lambda arg: str.replace(str.replace(arg, '/', '%2F'), '=', '%3D')
+					|        fragment = '%00'.join(list(map(encode, args[1:])))
+					|        if fragment != '':
+					|            fragment = '#' + fragment
+					|        xbmc.executebuiltin('StartAndroidActivity($startArgs)' % fragment)""".stripMargin()
+			def retryLine = '            notify(getLocalizedString(30116), time=7000)'
+			def retryLinePatched = """
+					|            from lt2http.util import translatePath
+					|            $configLinePatched
+					|            args = ['--config=' + config_path]
+					|            encode = lambda arg: str.replace(str.replace(arg, '/', '%2F'), '=', '%3D')
+					|            fragment = '%00'.join(list(map(encode, args)))
+					|            if fragment != '':
+					|                fragment = '#' + fragment
+					|            xbmc.executebuiltin('StartAndroidActivity($startArgs)' % fragment)
+					|            notify(getLocalizedString(30116), time = 7000)""".stripMargin()
+			def translateLine = '    return translatePath(path)'
+			def translateLinePatched = """
+					|    pathPattern = '$pathPattern'
+					|    pathReplace = '$pathReplace'
+					|    result = translatePath(path)
+					|    return re.sub(pathPattern, pathReplace, result, 1)""".stripMargin()
+			def patches = [
+					(file("$addonIdDir/resources/site-packages/lt2http/daemon.py"))    : [
+							[configLine, configLinePatched],
+							[versionLine, versionLinePatched],
+							[binaryLine, binaryLinePatched],
+							[startLine, startLinePatched]
+					],
+					(file("$addonIdDir/resources/site-packages/lt2http/navigation.py")): [
+							[retryLine, retryLinePatched]
+					],
+					(file("$addonIdDir/resources/site-packages/lt2http/util.py"))      : [
+							[translateLine, translateLinePatched]
+					]
+			]
+			patches.forEach { f, patch ->
+				def tmp = file("${f.path}.tmp")
+				if (!f.renameTo(tmp)) {
+					throw new GradleException(tmp.path)
+				}
+				copy {
+					from f.parent
+					into f.parent
+					include tmp.name
+					rename { f.name }
+					filter {
+						def pair = patch.find { pair -> pair[0] == it }
+						patch.remove(pair) ? pair[1] : it
+					}
+				}
+				if (!patch.isEmpty()) {
+					def missing = patch.collect { it.join '\n\n' } join '\n\n\n\n'
+					throw new GradleException("$f.path missing:\n$missing")
+				}
+				delete tmp
+			}
+		}
+	}
+
+	task genMainAssets(dependsOn: [patchAddon]) {
+
+		doFirst {
+			delete srcMainAssetsGen
+		}
+
+		doLast {
+			copy {
+				from addonDir
+				into srcMainAssetsGen
+				exclude '**/.*'
+			}
+		}
+	}
+
+	task genMainJniLibs(dependsOn: [patchAddon]) {
+
+		doFirst {
+			delete srcMainJniLibsGen
+		}
+
+		doLast {
+			[
+					'arm64-v8a'  : 'android-arm64',
+					'armeabi-v7a': 'android-arm',
+					'x86'        : 'android-x86',
+					'x86_64'     : 'android-x64'
+			].forEach { abi, bin ->
+				copy {
+					from "$binariesIdDir/$bin"
+					into "$srcMainJniLibsGen/$abi"
+					rename { it ==~ /^lib.*\.so$/ ? it : "lib${it}.so" }
+				}
+			}
+		}
+	}
+
+	tasks.withType(JavaCompile) {
+		it.dependsOn genMainAssets
+		it.dependsOn genMainJniLibs
+	}
+
+	def androidClientZip = file("$buildDir.path/$addonId-${addonVersion}.android_client.zip")
+
+	task zipAndroidClient(type: Zip, dependsOn: [patchAddon]) {
+		from addonDir
+		destinationDirectory = androidClientZip.parentFile
+		archiveFileName = androidClientZip.name
+		exclude '**/.*'
+
+		doFirst {
+			delete androidClientZip
+		}
+	}
+}

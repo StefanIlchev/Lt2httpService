@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+	package="service.lt2http.android">
+
+	<application
+		android:extractNativeLibs="true"
+		android:icon="@mipmap/ic_launcher"
+		android:label="@string/app_name"
+		android:requestLegacyExternalStorage="true">
+
+		<activity
+			android:name=".MainActivity"
+			android:excludeFromRecents="true"
+			android:exported="true"
+			android:theme="@style/TranslucentTheme">
+
+			<intent-filter>
+				<action android:name="${mainIntentAction}" />
+				<category android:name="${mainIntentCategory}" />
+			</intent-filter>
+
+			<intent-filter>
+				<action android:name="${mainIntentAction}" />
+				<category android:name="android.intent.category.DEFAULT" />
+				<data android:scheme="version" />
+			</intent-filter>
+		</activity>
+
+		<service
+			android:name=".ForegroundService"
+			android:exported="false" />
+	</application>
+
+	<queries>
+
+		<intent>
+			<action android:name="android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION" />
+		</intent>
+	</queries>
+
+	<uses-permission-sdk-23 android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+	<uses-permission-sdk-23
+		android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+		android:maxSdkVersion="29" />
+
+	<uses-permission-sdk-23 android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+</manifest>
