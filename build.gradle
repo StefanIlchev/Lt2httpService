@@ -49,7 +49,7 @@ android {
 	defaultConfig {
 		minSdk 26
 		targetSdk compileSdk
-		versionCode localProperties.getProperty('versionCode') as Integer ?: 1
+		versionCode localProperties.getProperty('versionCode') as Integer ?: 2
 		versionName localProperties.getProperty('versionName') ?: "$versionCode"
 		applicationId 'service.lt2http.android'
 		manifestPlaceholders = [
@@ -171,8 +171,10 @@ if (addonZip != null && binariesZip != null) {
 			].join(', ')
 			def pathPattern = '/org\\.xbmc\\.kodi/'
 			def pathReplace = "/$applicationId/"
+			def applicationTempDir = "'/Android/data/$applicationId/files/.kodi/temp'"
+			def configDir = "str.replace(translatePath('special://temp/'), $applicationTempDir, '')"
 			def configLine = 'config_path = os.path.join(translatePath("special://temp/"), "lt2http-config.json")'
-			def configLinePatched = "config_path = os.path.join(translatePath(ADDON_PATH), '..', '..', '..', '..', '..', '..', '..', 'lt2http-config.json')"
+			def configLinePatched = "config_path = os.path.join($configDir, 'lt2http-config.json')"
 			def versionLine = '    installed_version = read_current_version(binary_dir)'
 			def versionLinePatched = """
 					|    installed_version = ADDON_VERSION
