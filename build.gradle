@@ -49,7 +49,7 @@ android {
 	defaultConfig {
 		minSdk 26
 		targetSdk compileSdk
-		versionCode localProperties.getProperty('versionCode') as Integer ?: 2
+		versionCode localProperties.getProperty('versionCode') as Integer ?: 3
 		versionName localProperties.getProperty('versionName') ?: "$versionCode"
 		applicationId 'service.lt2http.android'
 		manifestPlaceholders = [
@@ -186,21 +186,17 @@ if (addonZip != null && binariesZip != null) {
 			def binaryLinePatched = "    return 'N/A', 'N/A'"
 			def startLine = '        return subprocess.Popen(args, **kwargs)'
 			def startLinePatched = """
-					|        encode = lambda arg: str.replace(str.replace(arg, '/', '%2F'), '=', '%3D')
-					|        fragment = '%00'.join(list(map(encode, args[1:])))
-					|        if fragment != '':
-					|            fragment = '#' + fragment
-					|        xbmc.executebuiltin('StartAndroidActivity($startArgs)' % fragment)""".stripMargin()
+					|        dataFragment = '%00'.join(six.moves.urllib_parse.quote(arg, '') for arg in args[1:])
+					|        dataSuffix = '#' + dataFragment if dataFragment != '' else ''
+					|        xbmc.executebuiltin('StartAndroidActivity($startArgs)' % dataSuffix)""".stripMargin()
 			def retryLine = '            notify(getLocalizedString(30116), time=7000)'
 			def retryLinePatched = """
 					|            from lt2http.util import translatePath
 					|            $configLinePatched
 					|            args = ['--config=' + config_path]
-					|            encode = lambda arg: str.replace(str.replace(arg, '/', '%2F'), '=', '%3D')
-					|            fragment = '%00'.join(list(map(encode, args)))
-					|            if fragment != '':
-					|                fragment = '#' + fragment
-					|            xbmc.executebuiltin('StartAndroidActivity($startArgs)' % fragment)
+					|            dataFragment = '%00'.join(six.moves.urllib_parse.quote(arg, '') for arg in args)
+					|            dataSuffix = '#' + dataFragment if dataFragment != '' else ''
+					|            xbmc.executebuiltin('StartAndroidActivity($startArgs)' % dataSuffix)
 					|            notify(getLocalizedString(30116), time = 7000)""".stripMargin()
 			def translateLine = '    return translatePath(path)'
 			def translateLinePatched = """

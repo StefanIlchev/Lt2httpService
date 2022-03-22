@@ -19,10 +19,12 @@ import ilchev.stefan.binarywrapper.BaseDaemonRunnable;
 public class DaemonRunnable extends BaseDaemonRunnable {
 
 	private static final Set<Integer> SUBPROCESS_EXIT_VALUES_END = Collections.unmodifiableSet(new HashSet<>(
-			Arrays.asList(-9, 0, 1)
+			Arrays.asList(-9, 0)
 	));
 
-	private static final Set<Integer> SUBPROCESS_EXIT_VALUES_SKIP = Collections.singleton(-1);
+	private static final Set<Integer> SUBPROCESS_EXIT_VALUES_SKIP = Collections.unmodifiableSet(new HashSet<>(
+			Arrays.asList(-1, 1)
+	));
 
 	private static final Set<Integer> SUBPROCESS_EXIT_VALUES_START = Collections.singleton(5);
 
