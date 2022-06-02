@@ -49,6 +49,7 @@ android {
 
 	defaultConfig {
 		minSdk 26
+		targetSdk compileSdk
 		versionCode localProperties.getProperty('versionCode') as Integer ?: 3
 		versionName localProperties.getProperty('versionName') ?: "$versionCode"
 		manifestPlaceholders = [
