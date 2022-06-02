@@ -161,16 +161,15 @@ if (addonZip != null && binariesZip != null) {
 					mkp.yield addonInfo
 				}, it)
 			}
-			def applicationId = android.defaultConfig.applicationId
 			def startArgs = [
-					applicationId,
+					android.namespace,
 					android.defaultConfig.manifestPlaceholders['mainIntentAction'],
 					'',
 					"version:$addonVersion%s"
 			].join(', ')
 			def pathPattern = '/org\\.xbmc\\.kodi/'
-			def pathReplace = "/$applicationId/"
-			def applicationTempDir = "'/Android/data/$applicationId/files/.kodi/temp'"
+			def pathReplace = "/$android.namespace/"
+			def applicationTempDir = "'/Android/data/$android.namespace/files/.kodi/temp'"
 			def configDir = "str.replace(translatePath('special://temp/'), $applicationTempDir, '')"
 			def configLine = 'config_path = os.path.join(translatePath("special://temp/"), "lt2http-config.json")'
 			def configLinePatched = "config_path = os.path.join($configDir, 'lt2http-config.json')"
